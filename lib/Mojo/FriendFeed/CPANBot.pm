@@ -81,24 +81,21 @@ sub get_deps_metacpan {
   });
 }
 
-$irc->register_default_event_handlers;
-$irc->connect(sub{
-  my ($irc, $err) = @_;
+sub _connect {
+  my ($self, $irc, $err) = @_;
   if ($err) {
     warn $err;
     exit 1;
   }
-  foreach my $job (@{ $conf{jobs} }) {
+  foreach my $job (@{ $self->jobs }) {
     next unless my $chan = $job->{channel};
-    $irc->$join($chan) if $chan =~ /^#/;
+    $self->join($chan) if $chan =~ /^#/;
   }
-});
+}
 
-my @msgs;
-
-$ff->on( entry => sub {
-  my ($self, $entry) = @_;
-  my $data = parse($entry->{body});
+sub _entry {
+  my ($self, $ff, $entry) = @_;
+  my $data = $self->parse($entry->{body});
   
   my $msg = "$data->{text} http://metacpan.org/release/$data->{pause_id}/$data->{dist}-$data->{version}";
   say $msg;
@@ -121,17 +118,33 @@ $ff->on( entry => sub {
   }
 });
 
-$ff->on( error => sub { 
-  my ($ff, $tx, $err) = @_;
+sub _error { 
+  my ($self, $ff, $tx, $err) = @_;
   warn $err || $tx->res->message;
   $ff->listen
 });
 
-Mojo::IOLoop->recurring( 1 => sub {
-  $irc->$send( @{ shift @msgs } ) if @msgs;
-});
+sub run {
+  my $self = shift;
 
-$ff->listen;
+  my $irc = $self->irc;
+  $irc->register_default_event_handlers;
+  $irc->connect(sub{ $self->_connect(@_) });
 
-Mojo::IOLoop->start;
+  my $ff = $self->feed;
+  $ff->on( entry => sub { $self->_entry(@_) } );
+  $ff->on( error => sub { $self->_error(@_) } );
+  $ff->listen;
+
+  $self->{recurring} = $self->ioloop->recurring( 1 => sub {
+    my $msgs = $self->messages;
+    $self->send( @{ shift @$msgs } ) if @$msgs;
+  });
+}
+
+sub DESTROY {
+  $self->ioloop->remove($self->{recurring}) if $self->{recurring};
+}
+
+1;
 
