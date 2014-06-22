@@ -103,7 +103,7 @@ sub _entry {
   for my $job (@{ $self->jobs }) {
     my $filtered = 0;
     if (my $filter = $job->{dist}) {
-      $filtered++:
+      $filtered++;
       if ($data->{dist} =~ $filter) {
         push @{$self->messages}, [ $job->{channel} => $msg ];
         next;
