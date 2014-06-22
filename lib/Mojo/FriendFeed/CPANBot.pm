@@ -9,14 +9,12 @@ use Mojo::URL;
 use Mojo::IRC;
 use List::Util 'first';
 
-use Getopt::Long;
-
 has nickname => 'release_bot';
 has server   => 'irc.perl.org:6667';
 has user     => 'new cpan releases';
 
-has jobs     => [];
-has messages => [];
+has jobs     => sub { [] };
+has messages => sub { [] };
 
 has feed   => sub { Mojo::FriendFeed->new( request => '/feed/cpan' ) };
 has ioloop => sub { Mojo::IOLoop->singleton };
@@ -57,7 +55,7 @@ sub get_deps_metacpan {
   my ($self, $dist, $cb) = @_;
   my $url = "http://api.metacpan.org/v0/release/$dist";
 
-  $process = sub {
+  my $process = sub {
     my $tx = shift;
     my $deps = $tx->res->json('/dependency') || [];
     my @deps = map { $_->{module} } @$deps; # } # highlight fix
@@ -102,7 +100,7 @@ sub _entry {
 
   my @deps = @{ $data->{deps} || [] };
 
-  for my $job (@{ $conf{jobs} }) {
+  for my $job (@{ $self->jobs }) {
     if (my $filter = $job->{dist}) {
       if ($data->{dist} =~ $filter) {
         push @{$self->messages}, [ $job->{channel} => $msg ];
@@ -116,13 +114,13 @@ sub _entry {
       }
     }
   }
-});
+};
 
 sub _error { 
   my ($self, $ff, $tx, $err) = @_;
   warn $err || $tx->res->message;
   $ff->listen
-});
+};
 
 sub run {
   my $self = shift;
@@ -143,6 +141,7 @@ sub run {
 }
 
 sub DESTROY {
+  my $self = shift;
   $self->ioloop->remove($self->{recurring}) if $self->{recurring};
 }
 
