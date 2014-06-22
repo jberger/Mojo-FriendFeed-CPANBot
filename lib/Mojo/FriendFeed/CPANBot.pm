@@ -101,18 +101,22 @@ sub _entry {
   my @deps = @{ $data->{deps} || [] };
 
   for my $job (@{ $self->jobs }) {
+    my $filtered = 0;
     if (my $filter = $job->{dist}) {
+      $filtered++:
       if ($data->{dist} =~ $filter) {
         push @{$self->messages}, [ $job->{channel} => $msg ];
         next;
       }
     }
     if (my $filter = $job->{deps}) {
+      $filtered++;
       if (my $dep = first { $_ =~ $filter } @deps) {
         push @{$self->messages}, [ $job->{channel} => "$msg (depends on $dep)" ];
         next;
       }
     }
+    push @{$self->messages}, [ $job->{channel} => $msg ] unless $filtered;
   }
 };
 
